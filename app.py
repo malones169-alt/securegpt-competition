@@ -86,9 +86,9 @@ with col1:
         files = st.file_uploader("Upload evidence (optional)", accept_multiple_files=True, type=['txt','log','png','jpg','csv'])
         severity = st.selectbox("Severity", ["Unknown", "Low", "Medium", "High", "Critical"])
 index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.get('sample_severity', 'Unknown'))
-        )
         
-        if st.button("🔍 Analyze Incident", type="primary", use_container_width=True):
+        
+    if st.button("🔍 Analyze Incident", type="primary", use_container_width=True):
             if description:
                 with st.spinner("🤖 Analyzing..."):
                     prompt = "You are a Senior SOC Analyst. Analyze this incident:\n\n"
@@ -288,3 +288,4 @@ with col2:
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#666;"><p>🛡️ SecureGPT - Gemini 2.5 Flash</p></div>', unsafe_allow_html=True)
+
