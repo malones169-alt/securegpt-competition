@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 # Load API key from Streamlit secrets in cloud, .env locally
 try:
-    try:
+    
     api_key = st.secrets["GOOGLE_API_KEY"]
     st.sidebar.success("✅ API key loaded from secrets")
 except Exception as e:
@@ -271,6 +271,7 @@ with col2:
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#666;"><p>🛡️ SecureGPT - Gemini 2.5 Flash</p></div>', unsafe_allow_html=True)
+
 
 
 
