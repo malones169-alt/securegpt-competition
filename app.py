@@ -3,6 +3,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import os
 import json
+import re
 from datetime import datetime
 
 load_dotenv()
@@ -12,11 +13,33 @@ st.set_page_config(page_title="SecureGPT", page_icon="🛡️", layout="wide")
 
 st.markdown("""
 <style>
-.main-header {font-size: 3rem; font-weight: bold; color: #1f77b4; text-align: center; padding: 1rem;}
-.sub-header {font-size: 1.2rem; color: #666; text-align: center; margin-bottom: 2rem;}
+.main-header {
+    font-size: 3.5rem; 
+    font-weight: bold; 
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center; 
+    padding: 1rem;
+}
+.sub-header {
+    font-size: 1.3rem; 
+    color: #555; 
+    text-align: center; 
+    margin-bottom: 2rem;
+}
+.stButton>button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+}
+div[data-testid="stMetricValue"] {
+    font-size: 2rem;
+    color: #667eea;
+}
 </style>
 """, unsafe_allow_html=True)
-
 if 'history' not in st.session_state:
     st.session_state.history = []
 
@@ -33,35 +56,33 @@ with col1:
     
     if "Incident" in analysis_type:
         st.markdown("### 📝 Incident Details")
-# SAMPLE INCIDENTS
+        
+        # SAMPLE INCIDENTS
         with st.expander("💡 Load Sample Incident", expanded=False):
             sample_incidents = {
                 "Ransomware Attack": {
-                    "description": "User workstation DESKTOP-W10-045 infected with ransomware at 14:30 UTC. All files encrypted with .locked extension. Ransom note 'HOW_TO_DECRYPT.txt' demands 5 Bitcoin within 48 hours. Network logs show initial connection to suspicious IP 185.220.101.45 on port 4444. Process tree shows powershell.exe spawning cmd.exe and vssadmin.exe (shadow copy deletion). User Jane.Smith reported receiving phishing email with invoice.pdf.exe attachment 30 minutes prior to encryption.",
+                    "description": "User workstation DESKTOP-W10-045 infected with ransomware at 14:30 UTC. All files encrypted with .locked extension. Ransom note demands 5 Bitcoin within 48 hours. Network logs show initial connection to IP 185.220.101.45 on port 4444. Process tree shows powershell.exe spawning cmd.exe and vssadmin.exe. User Jane.Smith reported receiving phishing email 30 minutes prior.",
                     "severity": "Critical"
                 },
                 "PowerShell C2 Beacon": {
-                    "description": "EDR alert triggered on LAPTOP-SALES-012 for encoded PowerShell execution at 09:15 UTC. Base64 decoded command reveals download cradle from hxxp://malicious-domain[.]tk/payload.ps1. Process established persistent outbound HTTPS connections to 203.0.113.42:443 every 60 seconds (beacon pattern). Suspicious scheduled task 'WindowsUpdateCheck' created. No user activity at time of execution. Memory dump shows Cobalt Strike indicators.",
+                    "description": "EDR alert on LAPTOP-SALES-012 for encoded PowerShell at 09:15 UTC. Base64 decoded command reveals download from malicious-domain.tk/payload.ps1. Process established persistent HTTPS connections to 203.0.113.42:443 every 60 seconds. Suspicious scheduled task 'WindowsUpdateCheck' created. Memory dump shows Cobalt Strike indicators.",
                     "severity": "High"
                 },
-                "Lateral Movement Detected": {
-                    "description": "Multiple failed authentication attempts detected from compromised account SERVICE_ADMIN across 15 workstations in 10-minute window (09:30-09:40 UTC). Successful logon to HR-FILE-SERVER using pass-the-hash technique. PsExec.exe executed remotely on three systems (HR-WKS-001, HR-WKS-003, HR-WKS-007). Mimikatz indicators found in memory. Admin share access (C$) from unusual source IP 10.50.25.89. Account last legitimate use was 2 weeks ago.",
+                "Lateral Movement": {
+                    "description": "Multiple failed auth attempts from account SERVICE_ADMIN across 15 workstations in 10 minutes. Successful logon to HR-FILE-SERVER using pass-the-hash. PsExec.exe executed remotely on three systems. Mimikatz indicators found. Admin share access from unusual IP 10.50.25.89.",
                     "severity": "Critical"
+                
                 },
-                "Phishing with Credential Harvesting": {
-                    "description": "User reported suspicious Office365 login page after clicking link in email from CEO-impostor@company-portal[.]com. Email claimed urgent password reset required. Fake login page hosted at hxxps://office365-secure-login[.]xyz captured credentials. User credentials subsequently used to access mailbox from IP 198.51.100.22 (Nigeria). 250 emails forwarded to external address. MFA not enabled on account.",
-                    "severity": "High"
+                 "Phishing Campaign": {
+                     "description": "Mass phishing campaign detected targeting finance department. 45 employees received emails from 'cfo@company-secure[.]com' with Excel attachment 'Q4_Bonuses.xlsm'. Macro executes PowerShell download cradle. 3 users clicked and enabled macros. Credential harvesting page detected at hxxps://portal-login-verify[.]xyz. MFA prevented full compromise on 2 accounts. One account (finance.user@company.com) successfully compromised from IP 198.18.0.50 (Russia).",
+                     "severity": "High"
                 },
-                "Data Exfiltration via DNS": {
-                    "description": "Abnormal DNS query volume detected from database server DB-PROD-01 (45,000 queries in 1 hour vs normal 500/hour). Queries to various subdomains of exfil-server[.]com containing hex-encoded data. Analysis shows customer PII being exfiltrated via DNS tunneling. Malicious cron job discovered: /tmp/.hidden_script executing every 5 minutes. Initial access vector: compromised SSH key for service account.",
-                    "severity": "Critical"
-                }
+                  "Insider Threat Data Exfil": {
+                      "description": "Departing employee (termination scheduled in 2 days) accessed sensitive customer database outside normal hours (02:00-04:30 UTC). Downloaded 50GB of data to personal USB drive (SanDisk 64GB, SN: 4C530001). File activity shows copying customer_master.db, financial_records_2024.xlsx, and proprietary source code. Employee VPN'd from home IP, cleared browser history, and used company-issued laptop. HR flagged resignation as 'hostile departure' - employee moving to competitor.",
+                      "severity": "Critical"
+                 }
             }
-            
-            sample_choice = st.selectbox(
-                "Select a sample incident:",
-                [""] + list(sample_incidents.keys())
-            )
+            sample_choice = st.selectbox("Select sample:", [""] + list(sample_incidents.keys()))
             
             if sample_choice and st.button("📋 Load Sample", use_container_width=True):
                 st.session_state.sample_title = sample_choice
@@ -69,26 +90,13 @@ with col1:
                 st.session_state.sample_severity = sample_incidents[sample_choice]["severity"]
                 st.rerun()
         
-        # Text inputs with sample data if loaded
-        title = st.text_input(
-            "Incident Title", 
-            value=st.session_state.get('sample_title', ''),
-            placeholder="e.g., Suspicious PowerShell"
-        )
-        description = st.text_area(
-            "Describe the incident:", 
-            value=st.session_state.get('sample_description', ''),
-            placeholder="Details...", 
-            height=150
-        )
-        title = st.text_input("Incident Title", placeholder="e.g., Suspicious PowerShell")
-        description = st.text_area("Describe the incident:", placeholder="Details...", height=150)
+        title = st.text_input("Incident Title", value=st.session_state.get('sample_title', ''), placeholder="e.g., Suspicious PowerShell")
+        description = st.text_area("Describe the incident:", value=st.session_state.get('sample_description', ''), placeholder="Details...", height=150)
         files = st.file_uploader("Upload evidence (optional)", accept_multiple_files=True, type=['txt','log','png','jpg','csv'])
-        severity = st.selectbox("Severity", ["Unknown", "Low", "Medium", "High", "Critical"])
-index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.get('sample_severity', 'Unknown'))
+        severity_options = ["Unknown", "Low", "Medium", "High", "Critical"]
+        severity = st.selectbox("Severity", severity_options, index=severity_options.index(st.session_state.get('sample_severity', 'Unknown')))
         
-        
-    if st.button("🔍 Analyze Incident", type="primary", use_container_width=True):
+        if st.button("🔍 Analyze Incident", type="primary", use_container_width=True):
             if description:
                 with st.spinner("🤖 Analyzing..."):
                     prompt = "You are a Senior SOC Analyst. Analyze this incident:\n\n"
@@ -110,13 +118,11 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
                         st.success("✅ Analysis Complete!")
                         st.markdown("---")
                         st.markdown(response.text)
+                        
                         # IOC EXTRACTION
                         st.markdown("---")
                         st.subheader("🔍 Extracted IOCs")
                         
-                        import re
-                        
-                        # Extract IOCs
                         iocs = {
                             'ips': list(set(re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', response.text))),
                             'domains': list(set(re.findall(r'\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b', response.text.lower()))),
@@ -150,7 +156,6 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
                                 for hash in iocs['sha256']:
                                     st.code(hash[:16] + "...")
                         
-                        # Export IOCs as CSV
                         if any(iocs.values()):
                             ioc_csv = "Type,Value\n"
                             for ip in iocs['ips']:
@@ -162,12 +167,39 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
                             for hash in iocs['sha256']:
                                 ioc_csv += f"SHA256,{hash}\n"
                             
-                            st.download_button(
-                                "📥 Download IOCs (CSV)",
-                                ioc_csv,
-                                f"iocs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                "text/csv"
-                            )
+                            st.download_button("📥 Download IOCs (CSV)", ioc_csv, f"iocs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", "text/csv")
+                        
+                        # SPLUNK QUERIES
+                        st.markdown("---")
+                        st.subheader("🔎 Splunk Investigation Queries")
+                        
+                        with st.expander("📊 View Generated Splunk Queries", expanded=True):
+                            queries = []
+                            
+                            if iocs['ips']:
+                                ip_list = " OR ".join([f'dest_ip="{ip}"' for ip in iocs['ips']])
+                                queries.append({'name': 'Search for Suspicious IPs', 'query': f'index=* ({ip_list})\n| stats count by src_ip, dest_ip, dest_port\n| sort -count'})
+                            
+                            if 'powershell' in description.lower() or 'powershell' in response.text.lower():
+                                queries.append({'name': 'PowerShell Execution Events', 'query': 'index=windows EventCode=4688 process_name=*powershell.exe\n| table _time, Computer, User, CommandLine\n| sort -_time'})
+                                queries.append({'name': 'Encoded PowerShell Commands', 'query': 'index=windows powershell (encodedcommand OR -enc OR -e)\n| table _time, Computer, User, CommandLine\n| sort -_time'})
+                            
+                            if iocs['ips']:
+                                for ip in iocs['ips'][:3]:
+                                    queries.append({'name': f'Connections to {ip}', 'query': f'index=firewall OR index=proxy dest_ip="{ip}"\n| stats count by src_ip, dest_port\n| sort -count'})
+                            
+                            if 'ransomware' in description.lower() or 'encrypted' in description.lower():
+                                queries.append({'name': 'File Modification Activity', 'query': 'index=windows EventCode=4663 Object_Type=File\n| stats count by Computer, Object_Name, Process_Name\n| where count > 100'})
+                            
+                            queries.append({'name': 'Process Timeline', 'query': 'index=windows EventCode=4688\n| table _time, Computer, Process_Name, Process_Command_Line\n| sort _time'})
+                            
+                            for i, q in enumerate(queries, 1):
+                                st.markdown(f"**{i}. {q['name']}**")
+                                st.code(q['query'], language='spl')
+                            
+                            all_queries = "\n\n".join([f"-- {q['name']}\n{q['query']}" for q in queries])
+                            st.download_button("📥 Download All Queries", all_queries, f"splunk_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+                        
                         result = {'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'title': title, 'analysis': response.text}
                         st.session_state.history.append(result)
                         
@@ -177,70 +209,9 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
                             st.download_button("📄 Download TXT", response.text, f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
                         with col_e2:
                             st.download_button("📊 Download JSON", json.dumps(result, indent=2), f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-                    # SPLUNK QUERY GENERATOR
-                        st.markdown("---")
-                        st.subheader("🔎 Splunk Investigation Queries")
-                        
-                        with st.expander("📊 View Generated Splunk Queries", expanded=True):
-                            queries = []
-                            
-                            # Query 1: Search for IPs
-                            if iocs['ips']:
-                                ip_list = " OR ".join([f'dest_ip="{ip}"' for ip in iocs['ips']])
-                                queries.append({
-                                    'name': 'Search for Suspicious IPs',
-                                    'query': f'index=* ({ip_list})\n| stats count by src_ip, dest_ip, dest_port\n| sort -count'
-                                })
-                            
-                            # Query 2: PowerShell activity
-                            if 'powershell' in description.lower() or 'powershell' in response.text.lower():
-                                queries.append({
-                                    'name': 'PowerShell Execution Events',
-                                    'query': 'index=windows EventCode=4688 process_name=*powershell.exe\n| table _time, Computer, User, CommandLine\n| sort -_time'
-                                })
-                                queries.append({
-                                    'name': 'Encoded PowerShell Commands',
-                                    'query': 'index=windows powershell (encodedcommand OR -enc OR -e)\n| table _time, Computer, User, CommandLine\n| sort -_time'
-                                })
-                            
-                            # Query 3: Network connections
-                            if iocs['ips']:
-                                for ip in iocs['ips'][:3]:
-                                    queries.append({
-                                        'name': f'Network Connections to {ip}',
-                                        'query': f'index=firewall OR index=proxy dest_ip="{ip}"\n| stats count by src_ip, dest_port, action\n| sort -count'
-                                    })
-                            
-                            # Query 4: File creation/modification
-                            if 'ransomware' in description.lower() or 'encrypted' in description.lower():
-                                queries.append({
-                                    'name': 'File Modification Activity',
-                                    'query': 'index=windows EventCode=4663 Object_Type=File\n| stats count by Computer, Object_Name, Process_Name\n| where count > 100\n| sort -count'
-                                })
-                            
-                            # Query 5: Process execution timeline
-                            queries.append({
-                                'name': 'Process Execution Timeline',
-                                'query': f'index=windows EventCode=4688 Computer="*"\n| table _time, Computer, Process_Name, Process_Command_Line, Parent_Process_Name\n| sort _time'
-                            })
-                            
-                            # Display queries
-                            for i, q in enumerate(queries, 1):
-                                st.markdown(f"**{i}. {q['name']}**")
-                                st.code(q['query'], language='spl')
-                                st.markdown("")
-                            
-                            # Download all queries
-                            all_queries = "\n\n".join([f"-- {q['name']}\n{q['query']}" for q in queries])
-                            st.download_button(
-                                "📥 Download All Splunk Queries",
-                                all_queries,
-                                f"splunk_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                                "text/plain"
-                            )
+                    
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
-                        st.info("💡 Check your API key in .env file")
             else:
                 st.warning("⚠️ Please describe the incident")
     
@@ -251,10 +222,9 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
         if st.button("🔍 Analyze", type="primary", use_container_width=True):
             if email:
                 with st.spinner("🤖 Analyzing..."):
-                    prompt = f"Analyze for phishing:\n\nRISK SCORE (0-100):\nRED FLAGS:\nVERDICT:\nGUIDANCE:\n\nEMAIL:\n{email}"
                     try:
                         model = genai.GenerativeModel('gemini-2.5-flash')
-                        response = model.generate_content(prompt)
+                        response = model.generate_content(f"Analyze for phishing:\n\nRISK SCORE:\nRED FLAGS:\nVERDICT:\n\nEMAIL:\n{email}")
                         st.markdown(response.text)
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
@@ -266,11 +236,10 @@ index=["Unknown", "Low", "Medium", "High", "Critical"].index(st.session_state.ge
         if st.button("🔍 Analyze", type="primary", use_container_width=True):
             if log_file:
                 with st.spinner("🤖 Analyzing..."):
-                    logs = log_file.getvalue().decode('utf-8', errors='ignore')[:10000]
-                    prompt = f"Analyze security logs:\n\nSUMMARY:\nFINDINGS:\nANOMALIES:\nQUERIES:\n\nLOGS:\n{logs}"
                     try:
                         model = genai.GenerativeModel('gemini-2.5-flash')
-                        response = model.generate_content(prompt)
+                        logs = log_file.getvalue().decode('utf-8', errors='ignore')[:10000]
+                        response = model.generate_content(f"Analyze security logs:\n\nSUMMARY:\nFINDINGS:\n\nLOGS:\n{logs}")
                         st.markdown(response.text)
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
@@ -288,4 +257,3 @@ with col2:
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#666;"><p>🛡️ SecureGPT - Gemini 2.5 Flash</p></div>', unsafe_allow_html=True)
-
