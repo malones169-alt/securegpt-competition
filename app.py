@@ -7,19 +7,20 @@ import re
 from datetime import datetime
 # Load API key from Streamlit secrets in cloud, .env locally
 try:
+    # Load API key - Streamlit Cloud uses secrets, local uses .env
+api_key = None
+
+if "GOOGLE_API_KEY" in st.secrets:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    st.sidebar.success("✅ API key loaded from secrets")
-except Exception as e:
-    st.sidebar.error(f"⚠️ Secrets error: {e}")
+else:
     load_dotenv()
     api_key = os.getenv('GOOGLE_API_KEY')
-    if api_key:
-        st.sidebar.success("✅ API key loaded from .env")
-    else:
-        st.sidebar.error("❌ No API key found!")
 
-if api_key:
-    genai.configure(api_key=api_key)
+if not api_key:
+    st.error("🚨 CRITICAL: No API key found! Add GOOGLE_API_KEY to Streamlit secrets.")
+    st.stop()
+
+genai.configure(api_key=api_key)
 else:
     st.error("🚨 CRITICAL: No API key configured!")
  
@@ -283,6 +284,7 @@ with col2:
 
 st.markdown("---")
 st.markdown('<div style="text-align:center;color:#666;"><p>🛡️ SecureGPT - Gemini 2.5 Flash</p></div>', unsafe_allow_html=True)
+
 
 
 
